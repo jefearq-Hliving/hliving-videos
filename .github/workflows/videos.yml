@@ -1,0 +1,51 @@
+# Versões leves dos vídeos do Portal do Corretor, usadas pelo botão "WhatsApp" do portal.
+# Todo dia (ou ao clicar em "Run workflow"): lê a lista de vídeos do portal, comprime os que ainda
+# não têm versão leve (720p, até 25 MB) e publica em https://jefearq-hliving.github.io/hliving-videos/
+# O resumo de cada execução (vídeos novos e os que não deram certo) aparece na página da execução.
+name: Vídeos para o WhatsApp
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 9 * * *"   # todo dia, 6h17 em Brasília
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: videos
+  cancel-in-progress: false
+
+jobs:
+  gera:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    outputs:
+      mudou: ${{ steps.gera.outputs.mudou }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instala o ffmpeg
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - name: Gera os vídeos leves
+        id: gera
+        run: python3 gerar.py
+      - name: Prepara a publicação
+        if: steps.gera.outputs.mudou == 'true'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  publica:
+    needs: gera
+    if: needs.gera.outputs.mudou == 'true'
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
